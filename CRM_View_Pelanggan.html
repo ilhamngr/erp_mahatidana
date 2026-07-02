@@ -147,7 +147,8 @@
 </div>
 
 <script>
-  let dataPelangganCache = []; 
+let dataPelangganCache = []; 
+  var searchTimeout; // Variabel pengunci ketikan
 
   document.addEventListener("DOMContentLoaded", loadDataPelanggan);
 
@@ -155,11 +156,8 @@
     google.script.run
       .withSuccessHandler(function(data) {
         dataPelangganCache = data; 
-        
         const currentSearchKeyword = document.getElementById('searchInput').value;
-        if(currentSearchKeyword.trim() !== "") {
-          filterPelanggan(currentSearchKeyword);
-        } else {
+        if(currentSearchKeyword.trim() === "") {
           renderTableData(data); 
         }
       })
@@ -171,24 +169,32 @@
       .crm_getPelanggan();
   }
 
+  // --- ENGINE PENCARIAN SERVER-SIDE (LIVE SEARCH) ---
   function filterPelanggan(keyword) {
-    const searchKey = keyword.toLowerCase().trim();
+    const searchKey = keyword.trim();
     
+    // Jika kolom pencarian dihapus/kosong, kembalikan 100 data cache
     if (searchKey === "") {
       renderTableData(dataPelangganCache);
       return;
     }
+    // Minimal 2 karakter baru jalan
+    if (searchKey.length < 2) return; 
 
-    const filteredData = dataPelangganCache.filter(function(row) {
-      const matchNamaPerusahaan = row.nama_perusahaan ? row.nama_perusahaan.toLowerCase().includes(searchKey) : false;
-      const matchKontakPerson    = row.kontak_person ? row.kontak_person.toLowerCase().includes(searchKey) : false;
-      const matchAlamat          = row.alamat ? row.alamat.toLowerCase().includes(searchKey) : false;
-      const matchId              = row.id ? ('c-' + row.id).includes(searchKey) : false;
-      
-      return matchNamaPerusahaan || matchKontakPerson || matchAlamat || matchId;
-    });
+    const tbody = document.getElementById('tableBodyPelanggan');
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>Mencari data ke Supabase...</td></tr>';
 
-    renderTableData(filteredData);
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      google.script.run
+        .withSuccessHandler(function(data) {
+          renderTableData(data);
+        })
+        .withFailureHandler(function(err) {
+          tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-5"><i class="fa-solid fa-triangle-exclamation me-2"></i>Error Pencarian: ${err.message}</td></tr>`;
+        })
+        .crm_searchPelanggan(searchKey);
+    }, 600); // Tunggu user selesai mengetik 0.6 detik
   }
 
   function renderTableData(dataArray) {
@@ -199,7 +205,6 @@
       return;
     }
 
-    // BARIS SAKTI 2: Mengubah Array menjadi 1 string HTML raksasa tanpa membebani render browser
     const htmlString = dataArray.map(function(row) {
       const npwpHtml = row.npwp ? `<div class="text-muted fw-normal mt-1" style="font-size: 0.725rem;"><i class="fa-solid fa-credit-card me-1" style="font-size:9px;"></i> NPWP: ${row.npwp}</div>` : `<div class="text-danger fw-normal mt-1" style="font-size: 0.725rem;"><i class="fa-solid fa-circle-exclamation" style="font-size:9px;"></i> NPWP Belum Diisi</div>`;
 
@@ -212,12 +217,8 @@
           </td>
           <td>${row.kontak_person}</td>
           <td>
-            <div class="d-flex align-items-center mb-1">
-              <i class="fa-solid fa-envelope text-muted me-2" style="font-size: 10px;"></i> <span>${row.email}</span>
-            </div>
-            <div class="d-flex align-items-center">
-              <i class="fa-solid fa-phone text-muted me-2" style="font-size: 10px;"></i> <span>${row.telepon}</span>
-            </div>
+            <div class="d-flex align-items-center mb-1"><i class="fa-solid fa-envelope text-muted me-2" style="font-size: 10px;"></i> <span>${row.email}</span></div>
+            <div class="d-flex align-items-center"><i class="fa-solid fa-phone text-muted me-2" style="font-size: 10px;"></i> <span>${row.telepon}</span></div>
           </td>
           <td><span class="d-inline-block text-truncate" style="max-width: 140px;" title="${row.alamat}">${row.alamat}</span></td>
           <td class="pe-4 text-end">
@@ -228,22 +229,17 @@
           </td>
         </tr>
       `;
-    }).join(''); // <-- Kunci utamanya ada di .join('')
+    }).join(''); 
 
-    // Suntikkan ke DOM 1 kali saja
     tbody.innerHTML = htmlString; 
   }
 
   function handleFormSubmit(event) {
     event.preventDefault();
-    
     const btnSubmit = document.getElementById('btnSubmit');
     const spinner = document.getElementById('spinner');
-    btnSubmit.disabled = true;
-    spinner.classList.remove('d-none');
-
+    btnSubmit.disabled = true; spinner.classList.remove('d-none');
     const idValue = document.getElementById('pelanggan_id').value;
-
     const payload = {
       nama_perusahaan: document.getElementById('nama_perusahaan').value.trim(),
       npwp: document.getElementById('npwp').value.trim(), 
@@ -258,107 +254,71 @@
       google.script.run
         .withSuccessHandler(function(response) {
           if(response.success) {
-            resetFormState();
-            loadDataPelanggan(); 
-            showToast(response.message, 'success');
-          } else {
-            showToast("Gagal Update: " + response.message, 'danger');
-            resetButton(btnSubmit, spinner);
-          }
+            resetFormState(); loadDataPelanggan(); showToast(response.message, 'success');
+          } else { showToast("Gagal Update: " + response.message, 'danger'); resetButton(btnSubmit, spinner); }
         })
-        .withFailureHandler(function(error) {
-          showToast("Terjadi kesalahan server: " + error.message, 'danger');
-          resetButton(btnSubmit, spinner);
-        })
+        .withFailureHandler(function(error) { showToast("Terjadi kesalahan server: " + error.message, 'danger'); resetButton(btnSubmit, spinner); })
         .crm_updatePelanggan(payload);
-        
     } else {
       google.script.run
         .withSuccessHandler(function(response) {
           if(response.success) {
-            document.getElementById('formPelanggan').reset(); 
-            loadDataPelanggan(); 
-            showToast(response.message, 'success');
-          } else {
-            showToast("Gagal: " + response.message, 'danger');
-            resetButton(btnSubmit, spinner);
-          }
+            resetFormState(); loadDataPelanggan(); showToast(response.message, 'success');
+          } else { showToast("Gagal: " + response.message, 'danger'); resetButton(btnSubmit, spinner); }
         })
-        .withFailureHandler(function(error) {
-          showToast("Terjadi kesalahan server: " + error.message, 'danger');
-          resetButton(btnSubmit, spinner);
-        })
+        .withFailureHandler(function(error) { showToast("Terjadi kesalahan server: " + error.message, 'danger'); resetButton(btnSubmit, spinner); })
         .crm_addPelanggan(payload);
     }
   }
 
   function prepareEditPelanggan(id) {
-    const pelanggan = dataPelangganCache.find(p => p.id === id);
-    if(!pelanggan) return;
-
-    document.getElementById('pelanggan_id').value = pelanggan.id;
-    document.getElementById('nama_perusahaan').value = pelanggan.nama_perusahaan;
-    document.getElementById('npwp').value = pelanggan.npwp || '';
-    document.getElementById('kontak_person').value = pelanggan.kontak_person;
-    document.getElementById('email').value = pelanggan.email;
-    document.getElementById('telepon').value = pelanggan.telepon;
-    document.getElementById('alamat').value = pelanggan.alamat;
-
-    document.getElementById('formTitle').innerText = "Edit Pelanggan";
-    document.getElementById('btnSubmitText').innerText = "Update Data";
-    document.getElementById('editIndicator').classList.remove('d-none');
-    document.getElementById('btnBatalEdit').classList.remove('d-none');
-    
-    document.getElementById('formPelanggan').scrollIntoView({ behavior: 'smooth' });
+    // Cari data di cache (karena data yang dirender pasti ada di cache atau hasil pencarian)
+    google.script.run.withSuccessHandler(data => {
+        const pelanggan = data.find(p => p.id === id);
+        if(!pelanggan) return;
+        document.getElementById('pelanggan_id').value = pelanggan.id;
+        document.getElementById('nama_perusahaan').value = pelanggan.nama_perusahaan;
+        document.getElementById('npwp').value = pelanggan.npwp || '';
+        document.getElementById('kontak_person').value = pelanggan.kontak_person;
+        document.getElementById('email').value = pelanggan.email;
+        document.getElementById('telepon').value = pelanggan.telepon;
+        document.getElementById('alamat').value = pelanggan.alamat;
+        document.getElementById('formTitle').innerText = "Edit Pelanggan";
+        document.getElementById('btnSubmitText').innerText = "Update Data";
+        document.getElementById('editIndicator').classList.remove('d-none');
+        document.getElementById('btnBatalEdit').classList.remove('d-none');
+        document.getElementById('formPelanggan').scrollIntoView({ behavior: 'smooth' });
+    }).crm_searchPelanggan(document.getElementById('searchInput').value || ' ');
   }
 
   function deletePelanggan(id, namaPerusahaan) {
-    // Memanggil Custom Global Modal yang ada di Layout Utama
     showConfirmDialog(
       "Konfirmasi Hapus", 
-      `Apakah Anda yakin ingin menghapus pelanggan "${namaPerusahaan}"?\nTindakan ini akan menghapus data permanen dari database.`,
+      `Apakah Anda yakin ingin menghapus pelanggan "${namaPerusahaan}"?\nTindakan ini akan menghapus data permanen.`,
       function() {
-        // Blok kode di bawah ini HANYA dieksekusi jika user mengklik tombol "Ya, Lanjutkan"
         const tbody = document.getElementById('tableBodyPelanggan');
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Menghapus data dari database...</td></tr>';
-
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2"></span>Menghapus data...</td></tr>';
         google.script.run
           .withSuccessHandler(function(response) {
-            if(response.success) {
-              showToast(response.message, 'success');
-            } else {
-              showToast("Gagal menghapus: " + response.message, 'danger');
-            }
-            loadDataPelanggan(); // Refresh tabel data pelanggan
-            if(document.getElementById('pelanggan_id').value == id) {
-              resetFormState(); // Reset form jika user kebetulan sedang mengedit data yang dihapus
-            }
+            if(response.success) showToast(response.message, 'success');
+            else showToast("Gagal menghapus: " + response.message, 'danger');
+            document.getElementById('searchInput').value = '';
+            loadDataPelanggan(); 
+            if(document.getElementById('pelanggan_id').value == id) resetFormState(); 
           })
-          .withFailureHandler(function(error) {
-            showToast("Gagal menghapus data: " + error.message, 'danger');
-            loadDataPelanggan();
-          })
+          .withFailureHandler(function(error) { showToast("Gagal menghapus data: " + error.message, 'danger'); loadDataPelanggan(); })
           .crm_deletePelanggan(id);
       }
     );
   }
 
   function resetFormState() {
-    document.getElementById('formPelanggan').reset();
-    document.getElementById('pelanggan_id').value = '';
-    
-    document.getElementById('formTitle').innerText = "Tambah Pelanggan";
-    document.getElementById('btnSubmitText').innerText = "Simpan Data";
-    document.getElementById('editIndicator').classList.add('d-none');
-    document.getElementById('btnBatalEdit').classList.add('d-none');
-
-    const btnSubmit = document.getElementById('btnSubmit');
-    const spinner = document.getElementById('spinner');
-    resetButton(btnSubmit, spinner);
+    document.getElementById('formPelanggan').reset(); document.getElementById('pelanggan_id').value = '';
+    document.getElementById('formTitle').innerText = "Tambah Pelanggan"; document.getElementById('btnSubmitText').innerText = "Simpan Data";
+    document.getElementById('editIndicator').classList.add('d-none'); document.getElementById('btnBatalEdit').classList.add('d-none');
+    resetButton(document.getElementById('btnSubmit'), document.getElementById('spinner'));
   }
 
-  function resetButton(btn, spinner) {
-    btn.disabled = false;
-    spinner.classList.add('d-none');
-  }
+  function resetButton(btn, spinner) { btn.disabled = false; spinner.classList.add('d-none'); }
+
 </script>
