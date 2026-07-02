@@ -1,0 +1,364 @@
+<style>
+  /* Modul CRM - Clean Inter Scheme */
+  .text-primary-eco { color: var(--eco-primary) !important; }
+  .btn-primary-eco {
+    background-color: var(--eco-primary); border: none; color: white; font-weight: 500; font-size: 0.85rem; transition: background-color 0.2s;
+  }
+  .btn-primary-eco:hover { background-color: #0077ed; color: white; }
+  .card-title-eco { font-weight: 600; font-size: 0.95rem; letter-spacing: -0.02em; color: #111827; }
+  .form-label { color: #4b5563; }
+  .form-control { font-size: 0.85rem; padding: 8px 12px; border-color: #e5e7eb; }
+  .form-control:focus { border-color: #cbd5e1; box-shadow: 0 0 0 2px rgba(30, 144, 255, 0.15); }
+  .table th {
+    font-weight: 600; color: #6b7280; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid #f3f4f6;
+  }
+  .table td { font-size: 0.825rem; color: #374151; border-bottom: 1px solid #f3f4f6; }
+  
+  /* Badge state info mode edit */
+  .badge-edit-mode { background-color: rgba(30, 144, 255, 0.1); color: #1e90ff; font-weight: 500; font-size: 0.7rem; }
+
+  /* Search Input Group Styling ala Supabase */
+  .search-group .input-group-text {
+    background-color: #ffffff;
+    border-right: none;
+    color: #9ca3af;
+  }
+  .search-group .form-control {
+    border-left: none;
+  }
+
+  /* Table Scroll Container & Fixed Header */
+  .table-wrapper-scroll {
+    max-height: calc(100vh - 280px); /* Ketinggian dinamis menyesuaikan layar */
+    overflow-y: auto;
+  }
+  
+  .table-wrapper-scroll thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: #f8f9fa; /* Menyamai warna bg-light bawaan Bootstrap */
+    box-shadow: 0 1px 0px #eaeaea; /* Trik agar border bawah tetap terlihat saat di-scroll */
+  }
+  
+  /* Modifikasi scrollbar agar lebih elegan (khusus Chrome/Safari/Edge) */
+  .table-wrapper-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+  .table-wrapper-scroll::-webkit-scrollbar-track { background: transparent; }
+  .table-wrapper-scroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
+  .table-wrapper-scroll::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+</style>
+
+<div class="container-fluid py-2">
+  <div class="row mb-4">
+    <div class="col-12">
+      <h4 class="text-primary-eco fw-bold mb-1"><i class="fa-solid fa-users me-2"></i>Master Pelanggan</h4>
+      <p class="text-muted small mb-0">Kelola data klien Mahatidana Lab.</p>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-4 mb-4">
+      <div class="card">
+        <div class="card-header bg-white border-0 pt-4 pb-2 d-flex justify-content-between align-items-center">
+          <h6 class="card-title-eco mb-0">
+            <i class="fa-solid fa-plus-circle me-2 text-primary-eco"></i>
+            <span id="formTitle">Tambah Pelanggan</span>
+          </h6>
+          <span id="editIndicator" class="badge badge-edit-mode d-none">Mode Edit</span>
+        </div>
+        <div class="card-body">
+          <form id="formPelanggan" onsubmit="handleFormSubmit(event)">
+            <input type="hidden" id="pelanggan_id">
+
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">Nama Perusahaan</label>
+              <input type="text" class="form-control" id="nama_perusahaan" required autocomplete="off">
+            </div>
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">NPWP Perusahaan</label>
+              <input type="text" class="form-control" id="npwp" placeholder="00.000.000.0-000.000" autocomplete="off">
+            </div>
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">Kontak Person</label>
+              <input type="text" class="form-control" id="kontak_person" required autocomplete="off">
+            </div>
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">Email</label>
+              <input type="email" class="form-control" id="email" required autocomplete="off">
+            </div>
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">No. Telepon</label>
+              <input type="text" class="form-control" id="telepon" required autocomplete="off">
+            </div>
+            <div class="mb-4">
+              <label class="form-label small fw-semibold">Alamat Lengkap</label>
+              <textarea class="form-control" id="alamat" rows="3" required></textarea>
+            </div>
+            
+            <div class="d-flex gap-2">
+              <button type="button" id="btnBatalEdit" class="btn btn-sm btn-light border w-50 d-none" onclick="resetFormState()">Batal</button>
+              <button type="submit" class="btn btn-primary-eco flex-grow-1 py-2" id="btnSubmit">
+                <span id="spinner" class="spinner-border spinner-border-sm d-none me-2" role="status" aria-hidden="true"></span>
+                <span id="btnSubmitText">Simpan Data</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-8 mb-4">
+      <div class="card">
+        <div class="card-header bg-white border-0 pt-4 pb-2 d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
+          <h6 class="card-title-eco mb-0"><i class="fa-solid fa-table me-2 text-primary-eco"></i>Daftar Pelanggan</h6>
+          
+          <div class="input-group search-group" style="max-width: 280px;">
+            <span class="input-group-text border border-end-0 py-1"><i class="fa-solid fa-magnifying-glass fs-7"></i></span>
+            <input type="text" class="form-control border border-start-0 py-1" id="searchInput" placeholder="Cari perusahaan atau kontak..." onkeyup="filterPelanggan(this.value)" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="card-body p-0 border-top">
+          <div class="table-responsive table-wrapper-scroll">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="bg-light">
+                <tr>
+                  <th class="ps-4">ID</th>
+                  <th>Perusahaan / Klien</th>
+                  <th>Kontak</th>
+                  <th>Email & Telepon</th>
+                  <th>Alamat</th>
+                  <th class="pe-4 text-end">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="tableBodyPelanggan">
+                <tr>
+                  <td colspan="6" class="text-center text-muted py-5">
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Memuat data...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let dataPelangganCache = []; 
+
+  document.addEventListener("DOMContentLoaded", loadDataPelanggan);
+
+  function loadDataPelanggan() {
+    google.script.run
+      .withSuccessHandler(function(data) {
+        dataPelangganCache = data; 
+        
+        const currentSearchKeyword = document.getElementById('searchInput').value;
+        if(currentSearchKeyword.trim() !== "") {
+          filterPelanggan(currentSearchKeyword);
+        } else {
+          renderTableData(data); 
+        }
+      })
+      .withFailureHandler(function(error) {
+        showToast("Gagal memuat data: " + error.message, 'danger');
+        document.getElementById('tableBodyPelanggan').innerHTML = 
+          `<tr><td colspan="6" class="text-center text-danger py-4">Gagal memuat data: ${error.message}</td></tr>`;
+      })
+      .crm_getPelanggan();
+  }
+
+  function filterPelanggan(keyword) {
+    const searchKey = keyword.toLowerCase().trim();
+    
+    if (searchKey === "") {
+      renderTableData(dataPelangganCache);
+      return;
+    }
+
+    const filteredData = dataPelangganCache.filter(function(row) {
+      const matchNamaPerusahaan = row.nama_perusahaan ? row.nama_perusahaan.toLowerCase().includes(searchKey) : false;
+      const matchKontakPerson    = row.kontak_person ? row.kontak_person.toLowerCase().includes(searchKey) : false;
+      const matchAlamat          = row.alamat ? row.alamat.toLowerCase().includes(searchKey) : false;
+      const matchId              = row.id ? ('c-' + row.id).includes(searchKey) : false;
+      
+      return matchNamaPerusahaan || matchKontakPerson || matchAlamat || matchId;
+    });
+
+    renderTableData(filteredData);
+  }
+
+  function renderTableData(dataArray) {
+    const tbody = document.getElementById('tableBodyPelanggan');
+
+    if(dataArray.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-5">Data pelanggan tidak ditemukan.</td></tr>';
+      return;
+    }
+
+    // BARIS SAKTI 2: Mengubah Array menjadi 1 string HTML raksasa tanpa membebani render browser
+    const htmlString = dataArray.map(function(row) {
+      const npwpHtml = row.npwp ? `<div class="text-muted fw-normal mt-1" style="font-size: 0.725rem;"><i class="fa-solid fa-credit-card me-1" style="font-size:9px;"></i> NPWP: ${row.npwp}</div>` : `<div class="text-danger fw-normal mt-1" style="font-size: 0.725rem;"><i class="fa-solid fa-circle-exclamation" style="font-size:9px;"></i> NPWP Belum Diisi</div>`;
+
+      return `
+        <tr>
+          <td class="fw-semibold text-secondary ps-4">C-${row.id}</td>
+          <td class="fw-semibold text-dark">
+            <div>${row.nama_perusahaan}</div>
+            ${npwpHtml}
+          </td>
+          <td>${row.kontak_person}</td>
+          <td>
+            <div class="d-flex align-items-center mb-1">
+              <i class="fa-solid fa-envelope text-muted me-2" style="font-size: 10px;"></i> <span>${row.email}</span>
+            </div>
+            <div class="d-flex align-items-center">
+              <i class="fa-solid fa-phone text-muted me-2" style="font-size: 10px;"></i> <span>${row.telepon}</span>
+            </div>
+          </td>
+          <td><span class="d-inline-block text-truncate" style="max-width: 140px;" title="${row.alamat}">${row.alamat}</span></td>
+          <td class="pe-4 text-end">
+            <div class="btn-group gap-1">
+              <button class="btn btn-sm btn-light border p-1 px-2" onclick="prepareEditPelanggan(${row.id})" title="Edit"><i class="fa-regular fa-pen-to-square text-primary-eco"></i></button>
+              <button class="btn btn-sm btn-light border p-1 px-2" onclick="deletePelanggan(${row.id}, '${row.nama_perusahaan.replace(/'/g, "\\'")}')" title="Hapus"><i class="fa-regular fa-trash-can text-danger"></i></button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join(''); // <-- Kunci utamanya ada di .join('')
+
+    // Suntikkan ke DOM 1 kali saja
+    tbody.innerHTML = htmlString; 
+  }
+
+  function handleFormSubmit(event) {
+    event.preventDefault();
+    
+    const btnSubmit = document.getElementById('btnSubmit');
+    const spinner = document.getElementById('spinner');
+    btnSubmit.disabled = true;
+    spinner.classList.remove('d-none');
+
+    const idValue = document.getElementById('pelanggan_id').value;
+
+    const payload = {
+      nama_perusahaan: document.getElementById('nama_perusahaan').value.trim(),
+      npwp: document.getElementById('npwp').value.trim(), 
+      kontak_person: document.getElementById('kontak_person').value.trim(),
+      email: document.getElementById('email').value.trim(),
+      telepon: document.getElementById('telepon').value.trim(),
+      alamat: document.getElementById('alamat').value.trim()
+    };
+
+    if(idValue) {
+      payload.id = parseInt(idValue);
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if(response.success) {
+            resetFormState();
+            loadDataPelanggan(); 
+            showToast(response.message, 'success');
+          } else {
+            showToast("Gagal Update: " + response.message, 'danger');
+            resetButton(btnSubmit, spinner);
+          }
+        })
+        .withFailureHandler(function(error) {
+          showToast("Terjadi kesalahan server: " + error.message, 'danger');
+          resetButton(btnSubmit, spinner);
+        })
+        .crm_updatePelanggan(payload);
+        
+    } else {
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if(response.success) {
+            document.getElementById('formPelanggan').reset(); 
+            loadDataPelanggan(); 
+            showToast(response.message, 'success');
+          } else {
+            showToast("Gagal: " + response.message, 'danger');
+            resetButton(btnSubmit, spinner);
+          }
+        })
+        .withFailureHandler(function(error) {
+          showToast("Terjadi kesalahan server: " + error.message, 'danger');
+          resetButton(btnSubmit, spinner);
+        })
+        .crm_addPelanggan(payload);
+    }
+  }
+
+  function prepareEditPelanggan(id) {
+    const pelanggan = dataPelangganCache.find(p => p.id === id);
+    if(!pelanggan) return;
+
+    document.getElementById('pelanggan_id').value = pelanggan.id;
+    document.getElementById('nama_perusahaan').value = pelanggan.nama_perusahaan;
+    document.getElementById('npwp').value = pelanggan.npwp || '';
+    document.getElementById('kontak_person').value = pelanggan.kontak_person;
+    document.getElementById('email').value = pelanggan.email;
+    document.getElementById('telepon').value = pelanggan.telepon;
+    document.getElementById('alamat').value = pelanggan.alamat;
+
+    document.getElementById('formTitle').innerText = "Edit Pelanggan";
+    document.getElementById('btnSubmitText').innerText = "Update Data";
+    document.getElementById('editIndicator').classList.remove('d-none');
+    document.getElementById('btnBatalEdit').classList.remove('d-none');
+    
+    document.getElementById('formPelanggan').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function deletePelanggan(id, namaPerusahaan) {
+    // Memanggil Custom Global Modal yang ada di Layout Utama
+    showConfirmDialog(
+      "Konfirmasi Hapus", 
+      `Apakah Anda yakin ingin menghapus pelanggan "${namaPerusahaan}"?\nTindakan ini akan menghapus data permanen dari database.`,
+      function() {
+        // Blok kode di bawah ini HANYA dieksekusi jika user mengklik tombol "Ya, Lanjutkan"
+        const tbody = document.getElementById('tableBodyPelanggan');
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Menghapus data dari database...</td></tr>';
+
+        google.script.run
+          .withSuccessHandler(function(response) {
+            if(response.success) {
+              showToast(response.message, 'success');
+            } else {
+              showToast("Gagal menghapus: " + response.message, 'danger');
+            }
+            loadDataPelanggan(); // Refresh tabel data pelanggan
+            if(document.getElementById('pelanggan_id').value == id) {
+              resetFormState(); // Reset form jika user kebetulan sedang mengedit data yang dihapus
+            }
+          })
+          .withFailureHandler(function(error) {
+            showToast("Gagal menghapus data: " + error.message, 'danger');
+            loadDataPelanggan();
+          })
+          .crm_deletePelanggan(id);
+      }
+    );
+  }
+
+  function resetFormState() {
+    document.getElementById('formPelanggan').reset();
+    document.getElementById('pelanggan_id').value = '';
+    
+    document.getElementById('formTitle').innerText = "Tambah Pelanggan";
+    document.getElementById('btnSubmitText').innerText = "Simpan Data";
+    document.getElementById('editIndicator').classList.add('d-none');
+    document.getElementById('btnBatalEdit').classList.add('d-none');
+
+    const btnSubmit = document.getElementById('btnSubmit');
+    const spinner = document.getElementById('spinner');
+    resetButton(btnSubmit, spinner);
+  }
+
+  function resetButton(btn, spinner) {
+    btn.disabled = false;
+    spinner.classList.add('d-none');
+  }
+</script>
